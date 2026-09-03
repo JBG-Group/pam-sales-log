@@ -1,0 +1,29 @@
+# ===== 絶対にコミットしないもの =====
+# Google OAuth クライアントシークレット / アクセストークン
+credentials.json
+token.json
+*.credentials.json
+
+# APIキー等
+.env
+.env.local
+
+# 音声ファイル（容量が大きく、内容も機密）
+audio_downloads/
+*.mp3
+*.m4a
+*.wav
+*.mp4
+
+# 書き起こしテキスト（商談内容そのもの）
+transcripts/
+
+# ===== 一般 =====
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
