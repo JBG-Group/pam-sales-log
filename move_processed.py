@@ -1,9 +1,13 @@
 """
 転記が済んだ音声ファイルを、処理済みフォルダへ移動する。
 
+DRIVE_LOG_FOLDER_IDS に複数のフォルダを指定している場合はすべてを探し、
+各ファイルは「置かれていたフォルダ」の配下にある処理済みフォルダへ移す
+（共有ドライブとマイドライブをまたいだ移動はしない）。
+
 使い方:
     python move_processed.py file1.mp3 file2.m4a
-    python move_processed.py --all          # フォルダ内の全音声を移動
+    python move_processed.py --all          # 全フォルダの全音声を移動
     python move_processed.py --from-list done.txt
 """
 import argparse
@@ -13,8 +17,9 @@ if sys.stdout.encoding != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
 
 import config
-from drive_utils import (get_drive_service, list_folder_contents,
-                         ensure_subfolder, move_file, nfc)
+from drive_utils import (ensure_subfolder, get_drive_service, is_audio,
+                         list_folder_contents, move_file, nfc)
+from googleapiclient.errors import HttpError
 
 
 def main():
@@ -24,30 +29,39 @@ def main():
     ap.add_argument("--from-list", help="1行1ファイル名のテキストから読む")
     args = ap.parse_args()
 
-    targets = set(nfc(f) for f in args.files)
+    targets = {nfc(f) for f in args.files}
     if args.from_list:
         with open(args.from_list, encoding="utf-8") as fh:
             targets |= {nfc(line.strip()) for line in fh if line.strip()}
-
     if not targets and not args.all:
         ap.error("ファイル名か --all を指定してください")
 
-    folder_id = config.require_log_folder()
     service = get_drive_service()
-    done_id = ensure_subfolder(service, folder_id, config.DONE_FOLDER_NAME)
-    print(f"移動先: {config.DONE_FOLDER_NAME} (id={done_id})")
-
-    moved = 0
-    for f in list_folder_contents(service, folder_id):
-        if f["mimeType"] == "application/vnd.google-apps.folder":
+    moved, found = 0, set()
+    for folder_id in config.require_log_folders():
+        try:
+            files = list_folder_contents(service, folder_id)
+        except HttpError as e:
+            print(f"⚠ フォルダにアクセスできません（{e.resp.status}）: {folder_id}")
             continue
-        # macOS 由来の NFD 名に備えて正規化して比較する
-        if args.all or nfc(f["name"]) in targets:
+        # 音声以外（スプレッドシート等）は --all でも動かさない
+        hits = [f for f in files if is_audio(f) and (args.all or nfc(f["name"]) in targets)]
+        if not hits:
+            continue
+        done_id = ensure_subfolder(service, folder_id, config.DONE_FOLDER_NAME)
+        print(f"[{folder_id}] → {config.DONE_FOLDER_NAME} (id={done_id})")
+        for f in hits:
             print(f"  移動: {f['name']}")
             move_file(service, f["id"], folder_id, done_id)
+            found.add(nfc(f["name"]))
             moved += 1
 
     print(f"\n{moved} 件を移動しました。")
+    missing = sorted(targets - found)
+    if missing:
+        print("⚠ どのフォルダにも見つからなかったファイル:")
+        for n in missing:
+            print(f"  - {n}")
 
 
 if __name__ == "__main__":

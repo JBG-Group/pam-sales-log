@@ -28,8 +28,15 @@ def _require(name: str) -> str:
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # --- Google Drive ---
-# 音声ファイルを置くフォルダのID（DriveのURL末尾）
-DRIVE_LOG_FOLDER_ID = os.getenv("DRIVE_LOG_FOLDER_ID", "")
+# 音声ファイルを置くフォルダのID（DriveのURL末尾）。共有ドライブ上のフォルダも可。
+# 複数ある場合はカンマ区切りで並べると、上から順にすべて走査する。
+#   例: DRIVE_LOG_FOLDER_IDS=新フォルダID,旧フォルダID
+# 単数形の DRIVE_LOG_FOLDER_ID も後方互換のため読む。
+DRIVE_LOG_FOLDER_IDS = [
+    x.strip()
+    for x in (os.getenv("DRIVE_LOG_FOLDER_IDS") or os.getenv("DRIVE_LOG_FOLDER_ID", "")).split(",")
+    if x.strip()
+]
 # 処理済みの移動先サブフォルダ名（存在しなければ自動作成）
 DONE_FOLDER_NAME = os.getenv("DONE_FOLDER_NAME", "processed")
 
@@ -60,5 +67,14 @@ def require_openai_key() -> str:
     return _require("OPENAI_API_KEY")
 
 
+def require_log_folders() -> list:
+    if not DRIVE_LOG_FOLDER_IDS:
+        raise RuntimeError(
+            "環境変数 DRIVE_LOG_FOLDER_IDS が未設定です。.env.example をコピーして .env を作成してください。"
+        )
+    return DRIVE_LOG_FOLDER_IDS
+
+
 def require_log_folder() -> str:
-    return _require("DRIVE_LOG_FOLDER_ID")
+    """後方互換: 先頭のフォルダIDを返す。"""
+    return require_log_folders()[0]

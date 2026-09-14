@@ -17,7 +17,7 @@ if sys.stdout.encoding != "utf-8":
 from openai import OpenAI
 
 import config
-from drive_utils import get_drive_service, list_folder_contents, download_file
+from drive_utils import get_drive_service, list_audio_in_folders, download_file
 
 
 def resolve_ffmpeg() -> str:
@@ -88,18 +88,14 @@ def looks_like_hallucination(text: str) -> bool:
 
 
 def main():
-    folder_id = config.require_log_folder()
+    folder_ids = config.require_log_folders()
     config.TRANSCRIPT_DIR.mkdir(parents=True, exist_ok=True)
     config.AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
     drive = get_drive_service()
-    files = list_folder_contents(drive, folder_id)
-    audio_files = sorted(
-        (f for f in files if f["mimeType"].startswith("audio/")),
-        key=lambda x: x["name"],
-    )
+    audio_files = list_audio_in_folders(drive, folder_ids)
 
-    print(f"=== 対象フォルダ: {len(audio_files)} 音声ファイル ===\n")
+    print(f"=== 対象フォルダ {len(folder_ids)} 件: {len(audio_files)} 音声ファイル ===\n")
     results = []
 
     for i, f in enumerate(audio_files, 1):
